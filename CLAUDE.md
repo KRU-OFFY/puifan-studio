@@ -59,19 +59,54 @@
 16. `supabase/seed.sql` — seed ข้อมูลจริงชุดแรกเข้าตาราง (แปลงจาก `05-SEED-DATA.md`)
 
 ## Tech stack
-- Next.js (App Router) + TypeScript
-- Supabase (Postgres + Auth + Storage)
-- Vercel สำหรับ deploy (ยังไม่ deploy ในเฟส scaffold)
-- Package manager: **npm** (ห้ามใช้ตัวอื่นถ้าไม่ได้บอก)
+- **Next.js 14.2** (App Router) + **React 18** + **TypeScript 5** (strict)
+- **Supabase** (Postgres + Auth + Storage) ผ่าน `@supabase/ssr` + `@supabase/supabase-js`
+- **Vitest** สำหรับ unit test (`npm run test`) + **ESLint** (`eslint-config-next`)
+- **CircleCI** สำหรับ CI (ดู `.circleci/config.yml`) — 2 job: `build-and-check` (lint→typecheck→test→build) + `db-harness` (รัน migration + RLS/Gate 0 SQL harness บน Postgres 16 จริง)
+- Deploy บน **Vercel** (โปรเจกต์ยัง revert กลับจากการทดลอง Cloudflare Workers — อ้างอิง commit `09e9b51`)
+- Node.js **20+** (แนะนำ 22) · Package manager: **npm** (ห้ามใช้ตัวอื่นถ้าไม่ได้บอก)
 
 ## เค้าโครงโฟลเดอร์
 ```
-app/                Next.js routes
-components/         UI ซ้ำ ๆ
-lib/supabase/       Supabase client (browser / server / admin)
-supabase/migrations SQL migration
-docs/               เอกสาร (QC checklist ฯลฯ)
+app/
+  (auth)/                   หน้า login / signup (public routes)
+  (app)/                    หน้าใต้ auth guard
+    dashboard/              health check Supabase
+    workspaces/[id]/        จัดการ workspace + audit log ล่าสุด
+    channels/[id]/          หน้า channel + ปุ่ม Gate 0 (approve)
+      episodes|assets|characters/  ลิสต์ nested ต่อ channel
+    episodes/[id]/          แก้ตอน + transition state
+    assets/[id]/            แก้ asset + rights_records (1:1)
+    characters/[id]/        แก้ Character Bible
+  layout.tsx · page.tsx · globals.css
+components/                 Form components (Auth/Workspace/Channel/Episode/Asset/Character/EpisodeCharacters)
+lib/
+  supabase/                 client (browser) · server (SSR/RSC) · admin (service-role) · middleware helper
+  auth|workspace|channel|episode|asset|character/
+                            actions.ts (Server Actions) · validation.ts + validation.test.ts
+  audit/                    log.ts (log_audit RPC wrapper) · sanitize.ts + test (ตัด secret/PII)
+middleware.ts               refresh session + guard PROTECTED_PREFIXES
+supabase/
+  migrations/               0001..0012 (immutable หลัง commit)
+  tests/                    _supabase_shim.sql + rls_*_test.sql (รันโดย db-harness)
+  scripts/                  deploy-schema-0001-0012.sql · anchor-rights-puifun.sql (paste ใน SQL Editor)
+  seed.sql · config.toml
+audits/                     รายงาน Auditor แต่ละรอบ (immutable — commit ไฟล์ใหม่เสมอ)
+checklists/                 QUALITY-GATES.md
+plans/                      IMPLEMENTATION-ROADMAP.md
+prompts/                    PLAYBOOK-Sprint-* + PROJECT-BUILDER-* (คำสั่ง Task ให้ Claude/Codex)
+templates/                  rights-log CSV
+docs/                       Source of Truth หลัก (00–07 + QC-checklist + pilots/)
+.circleci/config.yml        CI pipeline
 ```
+
+## Module architecture
+- **Auth guard 2 ชั้น:** `middleware.ts` (redirect ก่อนถึงเพจ ตาม `PROTECTED_PREFIXES` = `/dashboard, /workspaces, /channels, /episodes, /assets, /characters`) + RLS ที่ DB (บังคับ scope จริงต่อให้ middleware ถูก bypass)
+- **Server Actions เท่านั้น** สำหรับ mutation — UI ไม่เรียก Supabase client โดยตรงเพื่อแก้ข้อมูล
+- **Validation ทำ 2 ชั้น:** `lib/<module>/validation.ts` (client-safe schema + unit test) → เข้า `actions.ts` แล้วพึ่ง RLS/trigger/RPC guard ที่ DB อีกชั้น
+- **State transition ทั้งหมดผ่าน RPC + trigger:** `approve_channel`, `transition_episode`, `create_asset_with_rights`, `log_audit`, `seed_puifun` — ทุก RPC เป็น `SECURITY DEFINER` + `search_path=''` + revoke EXECUTE จาก PUBLIC
+- **Channel-scoped entities** (pillars/characters/episodes/assets/episode_characters) เข้าถึงผ่าน helper `can_access_channel` / `has_channel_write` (ADR-004)
+- **Audit log append-only 2 ชั้น:** ไม่มี policy INSERT/UPDATE/DELETE ให้ client + trigger `BEFORE UPDATE/DELETE → RAISE` — เขียนผ่าน RPC `log_audit` เท่านั้น (actor = `auth.uid()`)
 
 ## กติกา
 - ทำทีละขั้น อธิบายสั้น ๆ ว่ากำลังจะทำอะไรก่อนลงมือ
@@ -83,16 +118,21 @@ docs/               เอกสาร (QC checklist ฯลฯ)
 
 ## Commands
 ```bash
-npm install
-npm run dev
-npm run build
-npm run typecheck
-npm run lint
+npm install          # ติดตั้ง dependency
+npm run dev          # dev server → http://localhost:3000
+npm run build        # production build
+npm run start        # start production build
+npm run lint         # eslint (next lint)
+npm run typecheck    # tsc --noEmit (strict)
+npm run test         # vitest run (unit test ใน lib/**/*.test.ts)
 ```
 
+VERIFY ก่อนสรุปทุกงานที่แตะโค้ด: `lint` → `typecheck` → `test` → `build` (ทั้ง 4 ต้องรันจริง ห้ามอ้างผ่านโดยไม่รัน) — งานที่แตะ SQL/RLS ต้องรัน `psql` กับ shim + migrations + `rls_*_test.sql` เพิ่มเติม (ดู `.circleci/config.yml` `db-harness` เป็นสูตรตรง ๆ)
+
 ## Branch convention
-- ทำงานบนบรานช์ที่แชตสั่ง (ตอนนี้: `claude/toffy-collaboration-system-wnnlpv`)
-- commit บ่อย ๆ ด้วยข้อความสั้นและอธิบาย "ทำไม" ไม่ใช่แค่ "อะไร"
+- ทำงานบนบรานช์ที่แชตสั่ง (บรานช์ปัจจุบัน: `claude/claude-md-documentation-vdxi0f`) — ห้าม push ไปบรานช์อื่นโดยไม่ได้รับอนุมัติ
+- commit บ่อย ๆ ด้วยข้อความสั้นและอธิบาย "ทำไม" ไม่ใช่แค่ "อะไร" (subject + body เป็นภาษาไทย)
+- หลัง push ให้เปิด PR (draft) เข้า `main` เสมอ ถ้ายังไม่มี PR เปิดอยู่
 
 ## บทบาทและวิธีทำงานร่วมกัน (หัวหน้า / สมอง / ช่าง)
 - **หัวหน้า** = เจ้าของโปรเจกต์ + ผู้อนุมัติขั้นสุดท้าย ทุกการเปลี่ยน scope/สถาปัตยกรรมต้องได้อนุมัติก่อน
@@ -110,9 +150,17 @@ npm run lint
 - ห้ามประกาศผลตรวจ (**Go / High=0 / severity**) โดยไม่มี **audit report ที่ commit จริงใน `audits/`** ที่ระบุ Head commit ที่ตรวจ + วันที่ + การนับ severity
 - re-audit ต้องรันใน session แยก (independent reviewer) และ **commit report ไฟล์ใหม่** (ห้ามทับไฟล์ audit รอบก่อน)
 
+## สถานะโค้ด ณ ปัจจุบัน (อ่านให้จบก่อนเสนอเพิ่ม feature)
+- **Migrations ที่ push แล้ว (immutable):** `0001_init` · `0002_workspaces` · `0003_channels` · `0004_content_channel_not_null` · `0005_audit_logs` · `0006_sprint1_hardening` · `0007_audit_metadata_sanitize` · `0008_channel_insert_gate` · `0009_episode_transition` · `0010_assets_rights` · `0011_characters_bible` · `0012_episode_characters`
+- **Feature ที่ใช้งานได้แล้ว (UI + Server Action + RLS harness ผ่าน):** Auth · Workspaces + members · Channels + Gate 0 (approve) · Episodes + state machine · Assets + Rights (1:1, atomic RPC) · Characters (Bible) · Episode↔Character m2m · Audit log
+- **RLS harness ที่ CI รันทุก push:** `rls_workspaces_test` · `rls_channels_test` · `rls_audit_test` · `rls_episodes_test` · `rls_assets_test` · `rls_characters_test` · `rls_episode_characters_test` — **เพิ่ม migration ใหม่ = ต้องเพิ่ม/ต่อยอด harness ให้ครอบ** (cross-workspace มองไม่เห็น + anon SELECT = 0 แถว + trigger/RPC guard ยิงจริง)
+- **RPC หลักที่มีอยู่แล้ว:** `create_workspace` · `approve_channel` · `transition_episode` · `create_asset_with_rights` · `log_audit` · `seed_puifun` — reuse ก่อนสร้างใหม่เสมอ
+- **Sprint 1 audit สถานะ:** re-audit #2 = **Go** (Critical=0, High=0) — รายงานอยู่ที่ `audits/sprint-1-reaudit-2.md` + finding เฉพาะ module (`characters-0011-audit.md`, `episode-characters-0012-audit.md`)
+
 ## Migration (immutable หลัง commit)
-- migration ที่ commit/push แล้ว = **ห้ามแก้ย้อน** → ต้องแก้เพิ่มด้วยไฟล์ใหม่ ไล่เลขต่อ (0007, 0008, ...)
-- migration ใหม่ต้องมี test ครอบใน harness และถูกหยิบเข้า CI db-harness อัตโนมัติ (loop `ls 0*.sql`)
+- migration ที่ commit/push แล้ว = **ห้ามแก้ย้อน** → ต้องแก้เพิ่มด้วยไฟล์ใหม่ ไล่เลขต่อ (**ถัดไปคือ `0013_*.sql`**)
+- migration ใหม่ต้องมี test ครอบใน harness และถูกหยิบเข้า CI db-harness อัตโนมัติ (loop `ls 0*.sql`) — ถ้าเพิ่มไฟล์ test ใหม่ต้องเติมเข้าลิสต์ใน `.circleci/config.yml` step "RLS / Gate 0 / append-only harness" ด้วย
+- ทุก migration ต้อง forward-only + มี rollback/recovery note · เพิ่ม NOT NULL/constraint หลัง backfill (อ้าง 0004 เป็นแม่แบบ)
 
 ---
 
