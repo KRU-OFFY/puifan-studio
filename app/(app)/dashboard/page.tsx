@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { logout } from "@/lib/auth/actions";
+import { DASHBOARD_NAV_LINKS, NAV_PATH_HINT } from "@/lib/nav/links";
 
 export const dynamic = "force-dynamic";
 
@@ -84,16 +85,20 @@ export default async function DashboardPage() {
         )}
       </section>
 
-      <section style={{ marginTop: 32 }}>
-        <h2 style={{ marginBottom: 8 }}>ขั้นตอนถัดไป</h2>
-        <ol>
-          <li>สร้างโปรเจกต์ใน Supabase แล้วเอาค่าไปใส่ใน <code>.env.local</code></li>
-          <li>รัน migration ใน <code>supabase/migrations/</code> แล้วรัน <code>supabase/seed.sql</code></li>
-          <li>
-            จัดการ <Link href="/workspaces">Workspaces</Link> (สร้าง / แก้ชื่อ / ดูสมาชิก)
-          </li>
-        </ol>
-      </section>
+      <nav aria-label="เมนูลัด" style={{ marginTop: 32 }}>
+        <h2 style={{ marginBottom: 8 }}>ไปที่</h2>
+        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+          {DASHBOARD_NAV_LINKS.map((link) => (
+            <li key={link.href} style={{ marginBottom: 12 }}>
+              <Link href={link.href}>{link.label}</Link>
+              <span style={{ color: "var(--muted)" }}> — {link.description}</span>
+            </li>
+          ))}
+        </ul>
+        <p style={{ color: "var(--muted)", marginTop: 16, marginBottom: 0 }}>
+          {NAV_PATH_HINT}
+        </p>
+      </nav>
     </main>
   );
 }
