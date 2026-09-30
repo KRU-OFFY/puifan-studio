@@ -3,7 +3,7 @@
 > **อ่านไฟล์นี้ก่อนเริ่มทำงานต่อทุกครั้ง** แล้วดำเนินการจากส่วน "ขั้นตอนถัดไป" ด้านล่าง
 > เมื่อคืบหน้า อย่าลืมอัปเดตวันที่ และย้ายงานที่เสร็จไปไว้ในส่วน "ทำเสร็จแล้ว"
 
-**อัปเดตล่าสุด:** 20 ส.ค. 2026 (Sprint 2 UI merged เข้า main + revert Cloudflare + ปิด TG3 บน Supabase จริง)
+**อัปเดตล่าสุด:** 18 ก.ย. 2026 (ปิด blocker deploy Vercel + ปุ่มลบตอน + RLS harness delete + CircleCI ต่อแล้ว)
 
 ---
 
@@ -13,14 +13,30 @@
 - ขอบเขต MVP: 7 เฟส จบที่ Export Production Package
 - ตัวชี้วัดหลัก: rewatch rate และ asset reuse ratio (สำคัญกว่า RPM)
 
-## ทำเสร็จล่าสุด (ส.ค. 2026)
+## ทำเสร็จล่าสุด (ส.ค.–ก.ย. 2026)
+- **✅ ปิด blocker deploy Vercel (18 ก.ย. 2026)** — `ai-you-tube-studio.vercel.app` = **Ready** ที่ `edb9477`
+  - **สาเหตุจริง (อ่านจาก build log):** Supabase marketplace integration ผี (`supabase-orange-compass` ชี้ฐานข้อมูล `fejdbckepcgcelkzpmtw` ที่ไม่มีอยู่แล้ว) → build ตายที่ขั้น **Provisioning Integrations** ภายใน 2 วินาที ทุกครั้ง
+  - **วิธีแก้:** ตัด integration ผีออกจากโปรเจกต์ + แก้ `NEXT_PUBLIC_SUPABASE_ANON_KEY` (เดิมใส่ **service_role key ผิด**) + ขยาย env เป็น Production+Preview + redeploy
+  - **ไม่ใช่** ปัญหาโค้ดและไม่ใช่ Framework Preset — `vercel.json` (PR #11) ไม่ผิดแต่ซ้ำซ้อน (preset ใน dashboard เป็น Next.js อยู่แล้ว) เก็บไว้ได้
+  - 📌 **บทเรียน:** ห้ามสรุปสาเหตุจาก error code ที่ยังไม่ได้อ่าน log จริง — รอบนี้เสียเวลาหลายวันเพราะสรุปว่าเป็น `STATIC_BUILD_NO_OUT_DIR` ทั้งที่ log จริงบอกคนละเรื่อง
+- **✅ ปุ่ม/action ลบตอน (delete episode) — [PR #9](https://github.com/KRU-OFFY/puifan-studio/pull/9) merged (`e86965f`)** — `deleteEpisode` (RLS owner+editor · `.select` ยืนยันลบจริง · audit `episode.delete` · redirect กลับรายการตอน) + `DeleteEpisodeControl` (confirm ก่อนลบ) + section ท้ายหน้า `episodes/[id]`
+  - RLS harness ครอบครบ: owner/editor ลบ = 1 แถว · viewer = 0 แถว (RLS บล็อก) · cascade ลบ `episode_characters` — ผ่านบน CircleCI `db-harness` จริง ([run #98](https://circleci.com/gh/KRU-OFFY/puifan-studio/98))
+- **✅ CircleCI ต่อ repo แล้ว** — `build-and-check` ✅ ([run #97](https://circleci.com/gh/KRU-OFFY/puifan-studio/97)) + `db-harness` ✅ ([run #98](https://circleci.com/gh/KRU-OFFY/puifan-studio/98)) รายงานเข้า PR แล้ว (เดิมมี config แต่ยังไม่ต่อ)
 - **✅ Sprint 2 UI merged เข้า main** — Episodes UI (FR-010), Asset/Rights UI (FR-009), Characters/Character Bible, episode_characters (m2m) รวมเข้า main แล้ว (PR #3/#4/#5) พร้อม migration 0008–0012
 - **✅ Revert Cloudflare → main (PR #7 merged, `09e9b51`)** — เคยมี session อื่น push งานย้ายไป Cloudflare Workers (Next 15 + OpenNext) **ตรงเข้า main โดยไม่ผ่าน PR** (main ยัง `protected=false`) → กู้คืนกลับ target เดิม (Vercel/Next.js) ที่ `next@14.2.15`; สภาพ Cloudflare สำรองไว้ที่ branch `backup/cloudflare-migration`
   - Verify: lint/typecheck/test **77**/build ผ่าน · Vercel Preview Ready
 - **✅ ปิด TG3 (E2E บน Supabase จริง `sxevdedipklivvgxosap`)** — deploy schema 0001–0012 + `seed_puifun()` (owner จริง) + anchor rights น้องปุย/มุ่ย
   - ยืนยันจาก DB จริง: `assets`=2, `rights_records`=2 (1:1 ตาม constraint), `created_by`=UID เจ้าของ (24614d73…)
   - สคริปต์: `supabase/scripts/deploy-schema-0001-0012.sql` + `anchor-rights-puifun.sql` (idempotent · verify ครบสายบน throwaway Postgres 16)
-- **⏳ งานเก็บกวาดฝั่งเจ้าของ (ไม่บล็อกงานโค้ด):** ลบ Cloudflare Worker `ai-youtube-studio` + ตัด GitHub integration · ตั้ง branch protection บน `main` (กัน push ตรง) · ยืนยัน CircleCI ต่อ repo · rotate service_role key ที่เคยหลุดในแชต
+- **🔴 หนี้อันดับ 1 — rotate `SUPABASE_SERVICE_ROLE_KEY`:** ค่า service_role เคยถูกใส่ผิดเป็น `NEXT_PUBLIC_SUPABASE_ANON_KEY` บน Vercel (พบตอนแก้ deploy) และ key เคยถูกวางในแชต
+  - **รั่วถึง browser จริงหรือไม่ = ยังไม่ยืนยัน** (ตรวจไม่ได้ด้วยเครื่องมือที่ช่างมี ไม่อนุมานแทน):
+    - (a) ประวัติ env ว่าค่าผิดถูกใส่เมื่อไร → Vercel API เห็นแค่ team ไม่เห็น project/deployment (404, token scope จำกัด)
+    - (b) มี deployment สถานะ Ready ที่ build ด้วยค่านั้นหรือไม่ → เหตุผลเดียวกับ (a)
+    - (c) ตรวจ JS bundle หา JWT ที่ `role=service_role` → egress ของ sandbox บล็อก `*.vercel.app` (403)
+  - **ต้องการเพื่อยืนยัน:** Vercel → Project Settings → Environment Variables (ประวัติ/วันที่แก้ `NEXT_PUBLIC_SUPABASE_ANON_KEY`) + รายการ deployment ที่ **Ready** ก่อนวันที่แก้
+  - **ไม่ว่าผลเป็นแบบไหน rotate key ยังเป็นงานอันดับ 1** (key เคยถูกวางในแชตแน่นอนอยู่แล้ว)
+  - ถ้ายืนยันว่ามี Ready deployment ที่ฝังค่านั้น → เพิ่มงาน: **ลบ/ปิด deployment นั้นหลัง rotate**
+- **⏳ งานเก็บกวาดฝั่งเจ้าของ (ไม่บล็อกงานโค้ด):** ลบ Cloudflare Worker `ai-youtube-studio` + ตัด GitHub integration · ตั้ง branch protection บน `main` (กัน push ตรง)
 
 ## ทำเสร็จแล้ว (Week 0)
 - เอกสารโลกแบรนด์ (brand world)
@@ -140,10 +156,16 @@
 
 ## ขั้นตอนถัดไป
 > Sprint 1 (Task 1.1–1.4) + Sprint 2 UI ✅ เสร็จและ merged เข้า main แล้ว · TG3 ปิดบน Supabase จริงแล้ว
-1. **Episodes UI — เติม gap + polish** (โครงหลัก list/create/edit/transition/characters + RLS + Gate 0 + audit อยู่บน main แล้ว)
-   - gap ที่เจอ: ยังไม่มี action/ปุ่ม **"ลบตอน"** ใน UI (RLS อนุญาต owner+editor แต่ยังไม่ต่อ UI) · ยังไม่มี UI component library (ทำ ad-hoc inline style ต่อหน้า)
-   - รอสมองเคาะ scope ก่อนทำ Plan (Inspect ฝั่งโค้ดส่งให้แล้ว)
-2. **งานเก็บกวาดฝั่งเจ้าของ** (คู่ขนาน ไม่บล็อกงานโค้ด): ลบ Cloudflare Worker · branch protection main · CircleCI connect · rotate service_role key
+1. **🔴 rotate `SUPABASE_SERVICE_ROLE_KEY`** — เร่งด่วนที่สุด · **หัวหน้ากดเอง ช่างทำแทนไม่ได้** (ค่าใหม่ห้ามผ่านแชต)
+   1) Supabase dashboard → Settings → API → rotate `service_role` key
+   2) ⚠️ ถ้าโปรเจกต์ยังใช้ **JWT secret แบบ legacy** การ rotate จะทำให้ **`anon` key เปลี่ยนด้วย** → ต้องอัปเดตทั้ง 2 ค่า
+   3) Vercel → Settings → Environment Variables → ใส่ค่าใหม่ทั้ง `NEXT_PUBLIC_SUPABASE_ANON_KEY` (ต้องเป็น **anon**) และ `SUPABASE_SERVICE_ROLE_KEY` ให้ครบทั้ง Production + Preview
+   4) Redeploy แล้วเช็กว่าแอปยังล็อกอินได้
+2. **Episodes UI — เติม gap + polish** (โครงหลัก list/create/edit/transition/characters/**ลบตอน** + RLS + Gate 0 + audit อยู่บน main แล้ว)
+   - gap ที่เหลือ: ยังไม่มี UI component library (ทำ ad-hoc inline style ต่อหน้า) — **รับเป็นหนี้เทคนิค** (ฝ่ายวางแผนสั่ง NOT NOW)
+   - รอสมองเคาะ scope ก่อนทำ Plan
+3. **ตรวจว่า `vercel.json` ยังจำเป็นไหม** — ไม่ผิดแต่ซ้ำซ้อนกับ Framework Preset (Next.js) ใน dashboard · เก็บไว้ได้ ไม่เร่ง
+4. **งานเก็บกวาดฝั่งเจ้าของ** (คู่ขนาน ไม่บล็อกงานโค้ด): ลบ Cloudflare Worker · branch protection main
 
 ## งานฝั่งเจ้าของ (ผมทำแทนไม่ได้ — ทำคู่ขนาน)
 - **จองแฮนเดิล YouTube `@puifun`** — ด่วนสุด
