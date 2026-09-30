@@ -28,6 +28,10 @@
 - **✅ ปิด TG3 (E2E บน Supabase จริง `sxevdedipklivvgxosap`)** — deploy schema 0001–0012 + `seed_puifun()` (owner จริง) + anchor rights น้องปุย/มุ่ย
   - ยืนยันจาก DB จริง: `assets`=2, `rights_records`=2 (1:1 ตาม constraint), `created_by`=UID เจ้าของ (24614d73…)
   - สคริปต์: `supabase/scripts/deploy-schema-0001-0012.sql` + `anchor-rights-puifun.sql` (idempotent · verify ครบสายบน throwaway Postgres 16)
+- **✅ Dashboard: แทน section "ขั้นตอนถัดไป" ที่เป็น scaffold ด้วยเมนูลัด** — ข้อความเดิมยังบอกให้ "สร้างโปรเจกต์ Supabase / รัน migration / seed" ซึ่งทำเสร็จนานแล้ว ทำให้เข้าใจผิดว่าระบบยังตั้งไม่เสร็จ
+  - เมนูมาจาก `lib/nav/links.ts` (แหล่งความจริงเดียว) ครอบด้วย `<nav aria-label="เมนูลัด">` + บรรทัดบอกเส้นทางจริง (workspace → channel → ตอน/ตัวละคร/asset)
+  - `lib/nav/links.test.ts` กันลิงก์ตาย: อ่าน `page.tsx` ใต้ `app/` แล้ว assert ว่า href ทุกตัวมี route จริงและไม่ต้องใช้ segment `[param]` (resolve path จากตำแหน่งไฟล์ test ไม่พึ่ง cwd)
+  - คงบล็อก "Supabase connection" ไว้ทั้งหมด (มีประโยชน์ตอน DB หลับ)
 - **🔴 หนี้อันดับ 1 — ตัด legacy key ที่รั่ว (`service_role`):** ค่า service_role เคยถูกใส่ผิดเป็น `NEXT_PUBLIC_SUPABASE_ANON_KEY` บน Vercel (พบตอนแก้ deploy) และ key เคยถูกวางในแชต
   - **รั่วถึง browser จริงหรือไม่ = ยังไม่ยืนยัน** (ตรวจไม่ได้ด้วยเครื่องมือที่ช่างมี ไม่อนุมานแทน):
     - (a) ประวัติ env ว่าค่าผิดถูกใส่เมื่อไร → Vercel API เห็นแค่ team ไม่เห็น project/deployment (404, token scope จำกัด)
@@ -178,7 +182,12 @@
    - gap ที่เหลือ: ยังไม่มี UI component library (ทำ ad-hoc inline style ต่อหน้า) — **รับเป็นหนี้เทคนิค** (ฝ่ายวางแผนสั่ง NOT NOW)
    - รอสมองเคาะ scope ก่อนทำ Plan
 3. **ตรวจว่า `vercel.json` ยังจำเป็นไหม** — ไม่ผิดแต่ซ้ำซ้อนกับ Framework Preset (Next.js) ใน dashboard · เก็บไว้ได้ ไม่เร่ง
-4. **งานเก็บกวาดฝั่งเจ้าของ** (คู่ขนาน ไม่บล็อกงานโค้ด): ลบ Cloudflare Worker · branch protection main
+4. **แสดง `error.message` ดิบให้ผู้ใช้ทั่วแอป** — `app/(app)/dashboard/page.tsx`, `app/(app)/workspaces/page.tsx` และ fallback ของ action แทบทุกตัวใน `lib/*/actions.ts` คืนข้อความ error จาก Postgres/PostgREST ตรง ๆ (ชื่อตาราง/constraint/policy)
+   - ไม่พบเส้นทางที่ secret หรือ PII หลุด (client ไม่ใส่ค่า apikey ลงใน message) และทุกจุดอยู่หลัง auth guard · schema ก็เปิดเผยอยู่แล้วใน `supabase/migrations/` ของ repo public → ผลกระทบจริงต่ำ
+   - **ควรแก้ทั้งแอปรวดเดียว** (map เป็นข้อความกลาง + `console.error` ตัวจริงฝั่ง server) ไม่ใช่แก้เฉพาะหน้าใดหน้าหนึ่ง เพราะจะทำให้พฤติกรรมไม่สม่ำเสมอ
+5. **ไม่มี `app/(app)/layout.tsx` → ไม่มี nav ร่วม** — แต่ละหน้าเขียนลิงก์ย้อนกลับเอง · เมนูลัดบน Dashboard ชี้ได้แค่ `/workspaces` เพราะตอน/ตัวละคร/asset อยู่ใต้ `channels/[id]/` ทั้งหมด
+   - งานนี้ให้รวม **deep link** (ดึง workspace/channel ของผู้ใช้มาลัดตรงไปตอน/ตัวละคร — แนวคิด Option B ที่เลื่อนไว้) เข้ามาด้วยในคราวเดียว
+6. **งานเก็บกวาดฝั่งเจ้าของ** (คู่ขนาน ไม่บล็อกงานโค้ด): ลบ Cloudflare Worker · branch protection main
 
 ## งานฝั่งเจ้าของ (ผมทำแทนไม่ได้ — ทำคู่ขนาน)
 - **จองแฮนเดิล YouTube `@puifun`** — ด่วนสุด
