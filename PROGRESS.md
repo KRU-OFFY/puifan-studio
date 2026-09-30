@@ -3,7 +3,7 @@
 > **อ่านไฟล์นี้ก่อนเริ่มทำงานต่อทุกครั้ง** แล้วดำเนินการจากส่วน "ขั้นตอนถัดไป" ด้านล่าง
 > เมื่อคืบหน้า อย่าลืมอัปเดตวันที่ และย้ายงานที่เสร็จไปไว้ในส่วน "ทำเสร็จแล้ว"
 
-**อัปเดตล่าสุด:** 30 ก.ย. 2026 (main = `5b066ca` · เมนูลัดบน Dashboard merged แล้ว)
+**อัปเดตล่าสุด:** 30 ก.ย. 2026 (main = `24be029` · sanitize error message merged แล้ว)
 
 ---
 
@@ -28,6 +28,17 @@
 - **✅ ปิด TG3 (E2E บน Supabase จริง `sxevdedipklivvgxosap`)** — deploy schema 0001–0012 + `seed_puifun()` (owner จริง) + anchor rights น้องปุย/มุ่ย
   - ยืนยันจาก DB จริง: `assets`=2, `rights_records`=2 (1:1 ตาม constraint), `created_by`=UID เจ้าของ (24614d73…)
   - สคริปต์: `supabase/scripts/deploy-schema-0001-0012.sql` + `anchor-rights-puifun.sql` (idempotent · verify ครบสายบน throwaway Postgres 16)
+- **✅ sanitize `error.message` ก่อนส่งถึงผู้ใช้ทั้งแอป** — [PR #16](https://github.com/KRU-OFFY/puifan-studio/pull/16) merged (`24be029`)
+  - `lib/errors.ts` (pure): `toUserMessage()` ตัดสินด้วย `err.code` ก่อน (23505/42501/23503/23514/22P02/PGRST116/P0001 + auth codes) แล้วจึง fallback ไปดูข้อความ · ถ้าขัดกันยึด code · ผลลัพธ์อยู่ใน `USER_MESSAGES` เท่านั้น ไม่เคย forward ข้อความต้นทาง
+  - `lib/errors.server.ts` (`import "server-only"`): `logServerError()` เขียนสาเหตุจริงฝั่ง server พร้อม code โดย `redactSensitive()` ตัด JWT / คีย์ `sb_*` / ค่าหลัง key อ่อนไหว / Bearer ออกก่อน · `reportError()` log เมื่อตกเป็นข้อความกลาง
+  - แทนที่ 18 จุด (server action 14 + หน้า UI 4) · คงข้อความเฉพาะที่ caller map ไว้แล้ว
+  - Verify: lint/typecheck/**test 117** (เพิ่ม 33)/build ผ่าน · CircleCI `build-and-check` ✅ [#117](https://circleci.com/gh/KRU-OFFY/puifan-studio/117) · `db-harness` ✅ [#118](https://circleci.com/gh/KRU-OFFY/puifan-studio/118) · หัวหน้าทดสอบบน Preview: ค่าซ้ำ channel/character + Gate 0 แสดงข้อความไทย ไม่มีข้อความดิบ
+  - 📌 ยืนยันจากการทดสอบจริง: โปรเจกต์ **เปิด Confirm email** → สมัครด้วยอีเมลซ้ำจะไม่คืน error (Supabase กัน user enumeration) ⇒ mapping `user_already_exists` จะไม่เกิดบน prod ตราบที่ยังเปิดอยู่ · คงไว้ได้ ไม่เสียหาย
+- **⚠️ ข้อมูลทดสอบจาก PR #16 ยังไม่ถูกลบ (30 ก.ย. 2026)** — หัวหน้ารัน `DO` block (guard + `raise exception`) ใน Supabase SQL Editor แล้ว แต่ตรวจ DB จริงหลังรันพบว่า **ข้อมูลยังอยู่ครบทั้ง 3 ชิ้น ด้วย id และ `created_at` เดิมเป๊ะ** ⇒ guard บางข้อไม่ผ่าน บล็อกจึง `raise` และ rollback ทั้งหมด (ไม่ใช่การสร้างใหม่)
+  - ยังค้างอยู่: workspace `puifun` (`197559c4-…`) · channel `ทดสอบ`/`test-dup` (draft, `aa59c23e-…`) · character `ปุย`/`test-char` (`1a31eef7-…`)
+  - workspace จริง `Puifun Studio` (`27d5d813-…`) ไม่ถูกแตะ
+  - 📌 บทเรียน: SQL Editor รันจน commit ในครั้งเดียวและแสดงผลแค่คำสั่งสุดท้าย → บล็อกที่ `raise` แล้ว rollback ดูเหมือนรันผ่าน · **ต้องตรวจด้วย `select` แยกรอบทุกครั้ง** (เพิ่มเป็นกฎใน `AGENTS.md` แล้ว)
+  - การลบนี้ทำนอกแอป (SQL Editor) จึง **ไม่มี audit log จากแอป** สำหรับการลบ — และ `audit_logs` ไม่มี FK ไป `workspaces` เลย จึงไม่ถูกลบตาม cascade ในทุกกรณี (append-only ปลอดภัย)
 - **✅ Dashboard: แทน section "ขั้นตอนถัดไป" ที่เป็น scaffold ด้วยเมนูลัด** — [PR #14](https://github.com/KRU-OFFY/puifan-studio/pull/14) merged (`5b066ca`) · ข้อความเดิมยังบอกให้ "สร้างโปรเจกต์ Supabase / รัน migration / seed" ซึ่งทำเสร็จนานแล้ว ทำให้เข้าใจผิดว่าระบบยังตั้งไม่เสร็จ
   - เมนูมาจาก `lib/nav/links.ts` (แหล่งความจริงเดียว) ครอบด้วย `<nav aria-label="เมนูลัด">` + บรรทัดบอกเส้นทางจริง (workspace → channel → ตอน/ตัวละคร/asset)
   - `lib/nav/links.test.ts` กันลิงก์ตาย: อ่าน `page.tsx` ใต้ `app/` แล้ว assert ว่า href ทุกตัวมี route จริงและไม่ต้องใช้ segment `[param]` (resolve path จากตำแหน่งไฟล์ test ไม่พึ่ง cwd)
