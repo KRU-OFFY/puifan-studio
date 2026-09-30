@@ -3,7 +3,7 @@
 > **อ่านไฟล์นี้ก่อนเริ่มทำงานต่อทุกครั้ง** แล้วดำเนินการจากส่วน "ขั้นตอนถัดไป" ด้านล่าง
 > เมื่อคืบหน้า อย่าลืมอัปเดตวันที่ และย้ายงานที่เสร็จไปไว้ในส่วน "ทำเสร็จแล้ว"
 
-**อัปเดตล่าสุด:** 18 ก.ย. 2026 (ปิด blocker deploy Vercel + ปุ่มลบตอน + RLS harness delete + CircleCI ต่อแล้ว)
+**อัปเดตล่าสุด:** 30 ก.ย. 2026 (main = `5b066ca` · เมนูลัดบน Dashboard merged แล้ว)
 
 ---
 
@@ -28,10 +28,13 @@
 - **✅ ปิด TG3 (E2E บน Supabase จริง `sxevdedipklivvgxosap`)** — deploy schema 0001–0012 + `seed_puifun()` (owner จริง) + anchor rights น้องปุย/มุ่ย
   - ยืนยันจาก DB จริง: `assets`=2, `rights_records`=2 (1:1 ตาม constraint), `created_by`=UID เจ้าของ (24614d73…)
   - สคริปต์: `supabase/scripts/deploy-schema-0001-0012.sql` + `anchor-rights-puifun.sql` (idempotent · verify ครบสายบน throwaway Postgres 16)
-- **✅ Dashboard: แทน section "ขั้นตอนถัดไป" ที่เป็น scaffold ด้วยเมนูลัด** — ข้อความเดิมยังบอกให้ "สร้างโปรเจกต์ Supabase / รัน migration / seed" ซึ่งทำเสร็จนานแล้ว ทำให้เข้าใจผิดว่าระบบยังตั้งไม่เสร็จ
+- **✅ Dashboard: แทน section "ขั้นตอนถัดไป" ที่เป็น scaffold ด้วยเมนูลัด** — [PR #14](https://github.com/KRU-OFFY/puifan-studio/pull/14) merged (`5b066ca`) · ข้อความเดิมยังบอกให้ "สร้างโปรเจกต์ Supabase / รัน migration / seed" ซึ่งทำเสร็จนานแล้ว ทำให้เข้าใจผิดว่าระบบยังตั้งไม่เสร็จ
   - เมนูมาจาก `lib/nav/links.ts` (แหล่งความจริงเดียว) ครอบด้วย `<nav aria-label="เมนูลัด">` + บรรทัดบอกเส้นทางจริง (workspace → channel → ตอน/ตัวละคร/asset)
   - `lib/nav/links.test.ts` กันลิงก์ตาย: อ่าน `page.tsx` ใต้ `app/` แล้ว assert ว่า href ทุกตัวมี route จริงและไม่ต้องใช้ segment `[param]` (resolve path จากตำแหน่งไฟล์ test ไม่พึ่ง cwd)
   - คงบล็อก "Supabase connection" ไว้ทั้งหมด (มีประโยชน์ตอน DB หลับ)
+  - Verify: lint/typecheck/**test 84** (เพิ่ม 7)/build ผ่าน · CircleCI `build-and-check` ✅ [#110](https://circleci.com/gh/KRU-OFFY/puifan-studio/110) · `db-harness` ✅ [#109](https://circleci.com/gh/KRU-OFFY/puifan-studio/109) · Vercel preview ✅
+  - ⏳ ยังไม่ได้ยืนยันด้วยตาบน production — ช่างเปิดหน้า prod เองไม่ได้ (egress ของ sandbox บล็อก `*.vercel.app` = 403) และ Vercel API ตอบ 403 `You don't have permission to list the deployment` → **หัวหน้าเปิด `/dashboard` บน prod ดูเองว่าเมนูลัดกดไป `/workspaces` ได้ และบล็อก Supabase connection ยังอยู่**
+  - ⏳ branch `feat/dashboard-nav-shortcuts` ฝั่ง remote ยังลบไม่ได้ (git proxy ปฏิเสธ delete ref: `the remote end hung up unexpectedly`) · ลบ local แล้ว → หัวหน้ากด **Delete branch** บนหน้า PR #14 ได้เลย
 - **🔴 หนี้อันดับ 1 — ตัด legacy key ที่รั่ว (`service_role`):** ค่า service_role เคยถูกใส่ผิดเป็น `NEXT_PUBLIC_SUPABASE_ANON_KEY` บน Vercel (พบตอนแก้ deploy) และ key เคยถูกวางในแชต
   - **รั่วถึง browser จริงหรือไม่ = ยังไม่ยืนยัน** (ตรวจไม่ได้ด้วยเครื่องมือที่ช่างมี ไม่อนุมานแทน):
     - (a) ประวัติ env ว่าค่าผิดถูกใส่เมื่อไร → Vercel API เห็นแค่ team ไม่เห็น project/deployment (404, token scope จำกัด)
