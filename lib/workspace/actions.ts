@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit/log";
+import { reportError } from "@/lib/errors.server";
 import {
   validateWorkspaceName,
   normalizeTimezone,
@@ -37,7 +38,7 @@ export async function createWorkspace(
     p_currency: normalizeCurrency(currency),
   });
 
-  if (error) return { error: error.message };
+  if (error) return { error: reportError("workspace.create", error) };
 
   const ws = (Array.isArray(data) ? data[0] : data) as WorkspaceRow | null;
   if (!ws?.id) return { error: "สร้าง workspace ไม่สำเร็จ" };
@@ -73,7 +74,7 @@ export async function renameWorkspace(
     .select("id")
     .maybeSingle();
 
-  if (error) return { error: error.message };
+  if (error) return { error: reportError("workspace.update", error) };
   // ถ้าไม่ใช่ owner RLS จะกรองจนไม่มีแถวถูกแก้ (data = null)
   if (!data) return { error: "คุณไม่มีสิทธิ์แก้ workspace นี้ (ต้องเป็น owner)" };
 

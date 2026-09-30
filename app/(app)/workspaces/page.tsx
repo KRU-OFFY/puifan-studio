@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { CreateWorkspaceForm } from "@/components/WorkspaceForms";
+import { reportError } from "@/lib/errors.server";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,9 @@ export default async function WorkspacesPage() {
 
       <section style={{ marginTop: 24 }}>
         {error && (
-          <p style={{ color: "var(--err)" }}>โหลดข้อมูลไม่สำเร็จ: {error.message}</p>
+          <p style={{ color: "var(--err)" }}>
+            โหลดข้อมูลไม่สำเร็จ: {reportError("workspaces.list", error)}
+          </p>
         )}
         {!error && workspaces.length === 0 && (
           <p style={{ color: "var(--muted)" }}>

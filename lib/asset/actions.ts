@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit/log";
+import { reportError } from "@/lib/errors.server";
 import {
   isAssetType,
   isAssetRole,
@@ -71,7 +72,7 @@ export async function createAssetWithRights(
       return { error: "คุณไม่มีสิทธิ์สร้าง asset ในช่องนี้ (ต้องเป็น owner/editor)" };
     if (/episode ไม่ได้อยู่/i.test(error.message))
       return { error: "ตอนที่เลือกไม่ได้อยู่ในช่องนี้" };
-    return { error: error.message };
+    return { error: reportError("asset.create", error) };
   }
   const asset = (Array.isArray(data) ? data[0] : data) as { id?: string } | null;
   if (!asset?.id) return { error: "สร้าง asset ไม่สำเร็จ" };
@@ -123,7 +124,7 @@ export async function updateAssetWithRights(
     .select("id")
     .maybeSingle();
 
-  if (error) return { error: error.message };
+  if (error) return { error: reportError("asset.update", error) };
   if (!data) return { error: "คุณไม่มีสิทธิ์แก้ไข asset นี้" };
 
   const { error: rErr } = await supabase
@@ -138,7 +139,7 @@ export async function updateAssetWithRights(
       exported_at: exportedAt,
     })
     .eq("asset_id", assetId);
-  if (rErr) return { error: rErr.message };
+  if (rErr) return { error: reportError("asset.update.rights", rErr) };
 
   await logAudit(supabase, {
     action: "asset.update",
