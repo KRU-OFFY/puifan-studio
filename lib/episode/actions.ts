@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit/log";
+import { reportError } from "@/lib/errors.server";
 import {
   validateEpisodeTitle,
   isEpisodeStatus,
@@ -43,7 +44,7 @@ export async function createEpisode(
   if (error) {
     if (/Gate 0|ยังไม่อนุมัติ/i.test(error.message))
       return { error: "channel ยังไม่อนุมัติ — สร้างตอนไม่ได้ (Gate 0)" };
-    return { error: error.message };
+    return { error: reportError("episode.create", error) };
   }
   if (!data) return { error: "คุณไม่มีสิทธิ์สร้างตอนในช่องนี้ (ต้องเป็น owner/editor)" };
 
@@ -86,7 +87,7 @@ export async function updateEpisode(
     .select("id, channel_id")
     .maybeSingle();
 
-  if (error) return { error: error.message };
+  if (error) return { error: reportError("episode.update", error) };
   if (!data) return { error: "คุณไม่มีสิทธิ์แก้ไขตอนนี้" };
 
   await logAudit(supabase, {
@@ -124,7 +125,7 @@ export async function transitionEpisode(
       return { error: "เปลี่ยนสถานะนี้ไม่ได้ (ขั้นตอนไม่ถูกต้อง)" };
     if (/ไม่มีสิทธิ์|permission/i.test(error.message))
       return { error: "คุณไม่มีสิทธิ์เปลี่ยนสถานะตอนนี้" };
-    return { error: error.message };
+    return { error: reportError("episode.transition", error) };
   }
 
   revalidatePath(`/episodes/${id}`);
@@ -151,7 +152,7 @@ export async function linkCharacter(
       return { error: "ผูกตัวละครนี้ไว้แล้ว" };
     if (/row-level security|violates/i.test(error.message))
       return { error: "ผูกไม่ได้ (ต้องเป็นตัวละครในช่องเดียวกัน + สิทธิ์เขียน)" };
-    return { error: error.message };
+    return { error: reportError("episode.link_character", error) };
   }
 
   await logAudit(supabase, {
@@ -208,7 +209,7 @@ export async function deleteEpisode(
     .eq("id", id)
     .select("id");
 
-  if (error) return { error: error.message };
+  if (error) return { error: reportError("episode.delete", error) };
   if (!data || data.length === 0)
     return { error: "คุณไม่มีสิทธิ์ลบตอนนี้ (ต้องเป็น owner/editor)" };
 

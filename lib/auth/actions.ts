@@ -8,6 +8,7 @@ import {
 import { validateEmail, validatePassword } from "@/lib/auth/validation";
 import { logAudit } from "@/lib/audit/log";
 import { maskEmail } from "@/lib/audit/sanitize";
+import { reportError } from "@/lib/errors.server";
 
 export type AuthState = {
   error: string | null;
@@ -72,7 +73,7 @@ export async function signup(
   const supabase = createSupabaseServerClient();
   const { data, error } = await supabase.auth.signUp({ email, password });
 
-  if (error) return { error: error.message };
+  if (error) return { error: reportError("auth.signup", error) };
 
   // ถ้าโปรเจกต์เปิด email confirmation จะยังไม่มี session ทันที
   if (!data.session) {

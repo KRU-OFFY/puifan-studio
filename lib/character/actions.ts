@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit/log";
+import { reportError } from "@/lib/errors.server";
 import {
   validateCharacterName,
   validateSlug,
@@ -86,7 +87,7 @@ export async function createCharacter(
   if (error) {
     if (/duplicate key|unique/i.test(error.message))
       return { error: "slug นี้มีอยู่แล้วในช่อง" };
-    return { error: error.message };
+    return { error: reportError("character.create", error) };
   }
   if (!data) return { error: "คุณไม่มีสิทธิ์สร้างตัวละครในช่องนี้ (ต้องเป็น owner/editor)" };
 
@@ -134,7 +135,7 @@ export async function updateCharacter(
   if (error) {
     if (/duplicate key|unique/i.test(error.message))
       return { error: "slug นี้มีอยู่แล้วในช่อง" };
-    return { error: error.message };
+    return { error: reportError("character.update", error) };
   }
   if (!data) return { error: "คุณไม่มีสิทธิ์แก้ไขตัวละครนี้" };
 

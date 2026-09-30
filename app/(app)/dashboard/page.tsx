@@ -3,13 +3,17 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { logout } from "@/lib/auth/actions";
 import { DASHBOARD_NAV_LINKS, NAV_PATH_HINT } from "@/lib/nav/links";
+import { reportError } from "@/lib/errors.server";
+import type { UserMessage } from "@/lib/errors";
 
 export const dynamic = "force-dynamic";
 
 type ConnectionStatus =
   | { state: "missing-env" }
   | { state: "ok"; url: string }
-  | { state: "error"; message: string };
+  // message เป็น UserMessage ไม่ใช่ string — typecheck จึงบังคับให้ค่าที่แสดง
+  // ต้องผ่าน toUserMessage/reportError เท่านั้น (กันเผลอส่ง error.message ดิบกลับมา)
+  | { state: "error"; message: UserMessage };
 
 async function checkSupabase(): Promise<ConnectionStatus> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -18,12 +22,14 @@ async function checkSupabase(): Promise<ConnectionStatus> {
   try {
     const supabase = createSupabaseServerClient();
     const { error } = await supabase.from("pillars").select("id").limit(1);
+    // ตารางยังไม่ถูกสร้าง (42P01) ไม่ถือว่าเชื่อมต่อไม่ได้ — ต่อ DB ติดแล้ว
     if (error && !/relation .* does not exist/i.test(error.message)) {
-      return { state: "error", message: error.message };
+      // สาเหตุจริงไป log ฝั่ง server เท่านั้น ผู้ใช้เห็นข้อความที่ปลอดภัย
+      return { state: "error", message: reportError("dashboard.supabase", error) };
     }
     return { state: "ok", url };
   } catch (err) {
-    return { state: "error", message: err instanceof Error ? err.message : String(err) };
+    return { state: "error", message: reportError("dashboard.supabase", err) };
   }
 }
 
