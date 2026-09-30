@@ -28,14 +28,15 @@
 - **✅ ปิด TG3 (E2E บน Supabase จริง `sxevdedipklivvgxosap`)** — deploy schema 0001–0012 + `seed_puifun()` (owner จริง) + anchor rights น้องปุย/มุ่ย
   - ยืนยันจาก DB จริง: `assets`=2, `rights_records`=2 (1:1 ตาม constraint), `created_by`=UID เจ้าของ (24614d73…)
   - สคริปต์: `supabase/scripts/deploy-schema-0001-0012.sql` + `anchor-rights-puifun.sql` (idempotent · verify ครบสายบน throwaway Postgres 16)
-- **🔴 หนี้อันดับ 1 — rotate `SUPABASE_SERVICE_ROLE_KEY`:** ค่า service_role เคยถูกใส่ผิดเป็น `NEXT_PUBLIC_SUPABASE_ANON_KEY` บน Vercel (พบตอนแก้ deploy) และ key เคยถูกวางในแชต
+- **🔴 หนี้อันดับ 1 — ตัด legacy key ที่รั่ว (`service_role`):** ค่า service_role เคยถูกใส่ผิดเป็น `NEXT_PUBLIC_SUPABASE_ANON_KEY` บน Vercel (พบตอนแก้ deploy) และ key เคยถูกวางในแชต
   - **รั่วถึง browser จริงหรือไม่ = ยังไม่ยืนยัน** (ตรวจไม่ได้ด้วยเครื่องมือที่ช่างมี ไม่อนุมานแทน):
     - (a) ประวัติ env ว่าค่าผิดถูกใส่เมื่อไร → Vercel API เห็นแค่ team ไม่เห็น project/deployment (404, token scope จำกัด)
     - (b) มี deployment สถานะ Ready ที่ build ด้วยค่านั้นหรือไม่ → เหตุผลเดียวกับ (a)
     - (c) ตรวจ JS bundle หา JWT ที่ `role=service_role` → egress ของ sandbox บล็อก `*.vercel.app` (403)
   - **ต้องการเพื่อยืนยัน:** Vercel → Project Settings → Environment Variables (ประวัติ/วันที่แก้ `NEXT_PUBLIC_SUPABASE_ANON_KEY`) + รายการ deployment ที่ **Ready** ก่อนวันที่แก้
-  - **ไม่ว่าผลเป็นแบบไหน rotate key ยังเป็นงานอันดับ 1** (key เคยถูกวางในแชตแน่นอนอยู่แล้ว)
-  - ถ้ายืนยันว่ามี Ready deployment ที่ฝังค่านั้น → เพิ่มงาน: **ลบ/ปิด deployment นั้นหลัง rotate**
+  - **ไม่ว่าผลเป็นแบบไหน การตัด key เดิมยังเป็นงานอันดับ 1** (key เคยถูกวางในแชตแน่นอนอยู่แล้ว)
+  - **วิธีที่เลือก = ย้ายไป API key แบบใหม่ (`sb_publishable_` / `sb_secret_`) แล้ว Disable legacy API keys — ไม่ใช่ rotate JWT secret** (โปรเจกต์นี้มีคีย์ทั้งสองแบบให้ใช้อยู่แล้ว · rotate JWT secret จะพลอยเปลี่ยน `anon` ด้วย และยังทิ้ง legacy key ไว้ให้เผลอใช้ผิดซ้ำ) → ขั้นตอนอยู่ที่ "ขั้นตอนถัดไป" ข้อ 1
+  - ถ้ายืนยันว่ามี Ready deployment ที่ฝังค่านั้น → เพิ่มงาน: **ลบ/ปิด deployment นั้นหลังตัด legacy key**
 - **⏳ งานเก็บกวาดฝั่งเจ้าของ (ไม่บล็อกงานโค้ด):** ลบ Cloudflare Worker `ai-youtube-studio` + ตัด GitHub integration · ตั้ง branch protection บน `main` (กัน push ตรง)
 
 ## ทำเสร็จแล้ว (Week 0)
@@ -156,11 +157,23 @@
 
 ## ขั้นตอนถัดไป
 > Sprint 1 (Task 1.1–1.4) + Sprint 2 UI ✅ เสร็จและ merged เข้า main แล้ว · TG3 ปิดบน Supabase จริงแล้ว
-1. **🔴 rotate `SUPABASE_SERVICE_ROLE_KEY`** — เร่งด่วนที่สุด · **หัวหน้ากดเอง ช่างทำแทนไม่ได้** (ค่าใหม่ห้ามผ่านแชต)
-   1) Supabase dashboard → Settings → API → rotate `service_role` key
-   2) ⚠️ ถ้าโปรเจกต์ยังใช้ **JWT secret แบบ legacy** การ rotate จะทำให้ **`anon` key เปลี่ยนด้วย** → ต้องอัปเดตทั้ง 2 ค่า
-   3) Vercel → Settings → Environment Variables → ใส่ค่าใหม่ทั้ง `NEXT_PUBLIC_SUPABASE_ANON_KEY` (ต้องเป็น **anon**) และ `SUPABASE_SERVICE_ROLE_KEY` ให้ครบทั้ง Production + Preview
-   4) Redeploy แล้วเช็กว่าแอปยังล็อกอินได้
+1. **🔴 ย้ายไป API key แบบใหม่ + Disable legacy API keys** — เร่งด่วนที่สุด · **หัวหน้ากดเอง ช่างทำแทนไม่ได้** (ค่าใหม่ห้ามผ่านแชต)
+   > แทนการ rotate JWT secret: โปรเจกต์นี้มีทั้ง legacy (`anon`/`service_role`) และคีย์แบบใหม่ (`sb_publishable_`/`sb_secret_`) ให้ใช้อยู่แล้ว · rotate JWT secret จะพลอยเปลี่ยน `anon` ด้วยและยังทิ้ง legacy key ไว้ให้เผลอใช้ผิดซ้ำ ส่วนการย้ายไปคีย์ใหม่แล้วปิด legacy = ตัดคีย์ที่รั่วทิ้งถาวรในคราวเดียว
+   1) Supabase dashboard → Project Settings → **API Keys** → คัดลอก `sb_publishable_…` (ฝั่ง browser ได้) + สร้าง/คัดลอก `sb_secret_…` (**ฝั่ง server เท่านั้น**)
+   2) Vercel → Settings → Environment Variables → แทนค่าเดิมให้ครบทั้ง **Production + Preview**
+      - `NEXT_PUBLIC_SUPABASE_ANON_KEY` ← ค่า `sb_publishable_…`
+      - `SUPABASE_SERVICE_ROLE_KEY` ← ค่า `sb_secret_…`
+      - ชื่อตัวแปรคงเดิมได้ **ไม่ต้องแก้โค้ด** (หลักฐานด้านล่าง) · การเปลี่ยนชื่อให้ตรงความจริงเป็นงานแยกทีหลัง
+   3) `.env.local` บนเครื่องหัวหน้า → แทนค่าเดียวกัน (ไม่ผ่านแชต)
+   4) Redeploy → เช็ก: ล็อกอิน · dashboard · สร้าง/แก้/ลบตอน ยังทำงาน
+   5) เมื่อยืนยันว่าใช้งานได้ → Supabase dashboard → **Disable legacy API keys** (ตัด `anon`/`service_role` เดิมที่รั่วไปแล้วทิ้งถาวร)
+   6) ถ้าพบ Ready deployment เก่าที่ฝังค่า service_role → ลบ/ปิด deployment นั้นหลังจากนี้
+   - **หลักฐานความเข้ากันได้ (อ่านจากซอร์สที่ติดตั้งจริง ไม่ใช่เดา):**
+     - `@supabase/supabase-js` ระบุ `^2.45.4` แต่ lockfile resolve เป็น **2.110.8** ซึ่งรู้จักคีย์ใหม่ตรง ๆ — `isNewApiKey()` เช็ก `sb_publishable_` / `sb_secret_` (`node_modules/@supabase/supabase-js/dist/index.cjs`)
+     - `checkApiKeyFormat()` **ไม่ throw** และไม่ warn สำหรับ 2 prefix นี้ · key ถูกส่งเป็น header `apikey` เสมอ
+     - `@supabase/ssr` 0.5.2 (`dist/main/createServerClient.js:8`) ตรวจแค่ "ค่าว่างหรือไม่" แล้วส่ง key ต่อให้ `createClient` ตรง ๆ → ไม่จำกัดรูปแบบคีย์
+     - สรุป: `lib/supabase/server.ts:38` (`createSupabaseAdminClient`) รับ `sb_secret_…` ได้ทันทีโดยไม่ต้องแก้โค้ด
+     - ⚠️ หนี้ที่พบเพิ่ม (ไม่บล็อกการย้ายคีย์): SDK ยังใส่ key เป็น `Authorization: Bearer` เป็น fallback ด้วย ทั้งที่คอมเมนต์ในซอร์สเองระบุว่าคีย์แบบใหม่ "ต้องอยู่ใน header `apikey` เท่านั้น" → ปิดได้ด้วย option `omitApiKeyAsBearer` (มีใน 2.110.8) · ควรเปิดตอนแก้ admin client รอบถัดไป
 2. **Episodes UI — เติม gap + polish** (โครงหลัก list/create/edit/transition/characters/**ลบตอน** + RLS + Gate 0 + audit อยู่บน main แล้ว)
    - gap ที่เหลือ: ยังไม่มี UI component library (ทำ ad-hoc inline style ต่อหน้า) — **รับเป็นหนี้เทคนิค** (ฝ่ายวางแผนสั่ง NOT NOW)
    - รอสมองเคาะ scope ก่อนทำ Plan
